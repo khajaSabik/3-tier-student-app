@@ -1,31 +1,67 @@
 version: '3.8'
 
+networks:
+  students-app:
+    external: true
+
 services:
+  traefik:
+    image: traefik:v3.1.5
+    container_name: traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080"  # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - students-app
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=PathPrefix(`/dashboard`)"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.entrypoints=web"
+
   frontend:
     build: ./frontend
-    ports:
-      - "3000:80"
+    container_name: student-frontend
+    networks:
+      - students-app
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+      - "traefik.http.routers.frontend.entrypoints=web"
     depends_on:
       - backend
 
   backend:
     build: ./backend
-    ports:
-      - "5000:5000"
+    container_name: student-backend
+    networks:
+      - students-app
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=PathPrefix(`/api`)"
+      - "traefik.http.services.backend.loadbalancer.server.port=5000"
+      - "traefik.http.routers.backend.entrypoints=web"
     depends_on:
       - mysql
 
   mysql:
     image: mysql:8
+    container_name: student-mysql
     restart: always
-    container_name: mysql
     environment:
       MYSQL_ROOT_PASSWORD: rootpass
       MYSQL_DATABASE: studentDB
-    ports:
-      - "3306:3306"
     volumes:
       - mysql-data:/var/lib/mysql
+    networks:
+      - students-app
 
 volumes:
   mysql-data:

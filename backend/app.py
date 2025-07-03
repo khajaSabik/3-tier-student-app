@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS students (
 )
 """)
 
-@app.route('/students', methods=['POST'])
+@app.route('/api/students', methods=['POST'])
 def add_student():
     data = request.json
     sql = "INSERT INTO students (name, roll, gender) VALUES (%s, %s, %s)"
@@ -41,7 +41,7 @@ def add_student():
     db.commit()
     return jsonify({"message": "Student added"}), 201
 
-@app.route('/students', methods=['GET'])
+@app.route('/api/students', methods=['GET'])
 def get_students():
     cursor.execute("SELECT name, roll, gender FROM students")
     results = cursor.fetchall()
@@ -49,4 +49,4 @@ def get_students():
     return jsonify(students)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)

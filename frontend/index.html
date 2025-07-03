@@ -27,7 +27,7 @@
         roll: document.getElementById('roll').value,
         gender: document.getElementById('gender').value,
       };
-      await fetch('http://localhost:5000/students', {
+      await fetch('/api/students', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -37,7 +37,7 @@
     };
 
     async function loadStudents() {
-      const res = await fetch('http://localhost:5000/students');
+      const res = await fetch('/api/students');
       const students = await res.json();
       studentsList.innerHTML = students.map(s => `<li>${s.name} (${s.roll}) - ${s.gender}</li>`).join('');
     }
