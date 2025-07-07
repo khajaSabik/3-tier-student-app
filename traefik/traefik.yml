@@ -1,0 +1,28 @@
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    network: "students-app"
+    exposedByDefault: false
+
+api:
+  dashboard: true
+  insecure: true  # Only for local development
+
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /certs/students.dev.com+2.pem
+        keyFile: /certs/students.dev.com+2-key.pem

@@ -1,47 +1,191 @@
 <!DOCTYPE html>
-<html>
-<head><title>Student Form</title></head>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Registration</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 30px;
+      max-width: 800px;
+    }
+    .form-container {
+      display: flex;
+      gap: 2rem;
+    }
+    .form-section, .list-section {
+      flex: 1;
+    }
+    input, select, button {
+      margin: 8px 0;
+      padding: 10px;
+      width: 100%;
+      max-width: 300px;
+      box-sizing: border-box;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    ul {
+      padding-left: 0;
+      list-style: none;
+    }
+    li {
+      margin: 8px 0;
+      padding: 10px;
+      background: #f9f9f9;
+      border-radius: 4px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .error {
+      color: #d32f2f;
+      margin-top: 10px;
+    }
+    .loading {
+      color: #1976d2;
+    }
+  </style>
+</head>
 <body>
-  <h2>Student Registration</h2>
-  <form id="studentForm">
-    <input type="text" id="name" placeholder="Name" required /><br/>
-    <input type="text" id="roll" placeholder="Roll" required /><br/>
-    <select id="gender">
-      <option value="Male">Male</option>
-      <option value="Female">Female</option>
-    </select><br/>
-    <button type="submit">Submit</button>
-  </form>
+  <h1>Student Registration</h1>
+  
+  <div class="form-container">
+    <div class="form-section">
+      <h2>Add New Student</h2>
+      <form id="studentForm">
+        <input type="text" id="name" placeholder="Full Name" required>
+        <input type="text" id="roll" placeholder="Student ID" required>
+        <select id="gender" required>
+          <option value="" disabled selected>Select Gender</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+          <option value="Other">Other</option>
+        </select>
+        <button type="submit" id="submitBtn">Register Student</button>
+        <div id="formError" class="error"></div>
+      </form>
+    </div>
 
-  <h3>Student List</h3>
-  <ul id="students"></ul>
+    <div class="list-section">
+      <h2>Registered Students</h2>
+      <div id="loading" class="loading">Loading students...</div>
+      <ul id="students"></ul>
+      <div id="fetchError" class="error"></div>
+      <button id="refreshBtn">Refresh List</button>
+    </div>
+  </div>
 
   <script>
+    const API_BASE = "https://api.students.dev.com/api/students";
     const form = document.getElementById('studentForm');
     const studentsList = document.getElementById('students');
+    const submitBtn = document.getElementById('submitBtn');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const formError = document.getElementById('formError');
+    const fetchError = document.getElementById('fetchError');
+    const loading = document.getElementById('loading');
 
-    form.onsubmit = async (e) => {
-      e.preventDefault();
-      const data = {
-        name: document.getElementById('name').value,
-        roll: document.getElementById('roll').value,
-        gender: document.getElementById('gender').value,
-      };
-      await fetch('/api/students', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      form.reset();
-      loadStudents();
+    // Improved error handling
+    const handleError = (error, element) => {
+      console.error(error);
+      element.textContent = error.message || 'An error occurred';
+      setTimeout(() => element.textContent = '', 3000);
     };
 
+    // Form submission
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      formError.textContent = '';
+      submitBtn.disabled = true;
+
+      try {
+        const data = {
+          name: document.getElementById('name').value.trim(),
+          roll: document.getElementById('roll').value.trim(),
+          gender: document.getElementById('gender').value
+        };
+
+        // Basic validation
+        if (!data.name || !data.roll || !data.gender) {
+          throw new Error('Please fill all fields');
+        }
+
+        const res = await fetch(API_BASE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+          credentials: 'include' // Important for cookies/CORS
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.message || 'Submission failed');
+        }
+
+        form.reset();
+        await loadStudents();
+      } catch (err) {
+        handleError(err, formError);
+      } finally {
+        submitBtn.disabled = false;
+      }
+    };
+
+    // Load students with better UI feedback
     async function loadStudents() {
-      const res = await fetch('/api/students');
-      const students = await res.json();
-      studentsList.innerHTML = students.map(s => `<li>${s.name} (${s.roll}) - ${s.gender}</li>`).join('');
+      try {
+        loading.style.display = 'block';
+        fetchError.textContent = '';
+        studentsList.innerHTML = '';
+
+        const res = await fetch(API_BASE, {
+          credentials: 'include' // Important for cookies/CORS
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.message || 'Failed to load students');
+        }
+
+        const students = await res.json();
+        
+        if (students.length === 0) {
+          studentsList.innerHTML = '<li>No students registered yet</li>';
+        } else {
+          studentsList.innerHTML = students.map(s => `
+            <li>
+              <span>${s.name} (${s.roll})</span>
+              <span>${s.gender}</span>
+            </li>
+          `).join('');
+        }
+      } catch (err) {
+        handleError(err, fetchError);
+      } finally {
+        loading.style.display = 'none';
+      }
     }
 
+    // Refresh button
+    refreshBtn.onclick = loadStudents;
+
+    // Initial load
     loadStudents();
   </script>
 </body>

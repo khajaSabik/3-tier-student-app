@@ -1,52 +1,57 @@
-from flask import Flask, request, jsonify
-import mysql.connector
-from mysql.connector import Error
+from flask import Flask, jsonify, request
 from flask_cors import CORS
-import time
+import mysql.connector
+import os
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["https://students.dev.com"],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    }
+})
 
-# 🔁 Try connecting to MySQL with retry loop
-while True:
-    try:
-        db = mysql.connector.connect(
-            host="mysql",
-            user="root",
-            password="rootpass",
-            database="studentDB"
-        )
-        cursor = db.cursor()
-        print("✅ Connected to MySQL")
-        break
-    except Error as e:
-        print("❌ MySQL not ready yet. Retrying in 2s...")
-        time.sleep(2)
+# Database connection
+def get_db():
+    return mysql.connector.connect(
+        host="student-mysql",
+        user="root",
+        password="rootpass",
+        database="studentDB"
+    )
 
 # Create table if not exists
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS students (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255),
-    roll VARCHAR(50),
-    gender VARCHAR(10)
-)
-""")
+with get_db() as conn:
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS students (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            roll VARCHAR(50) NOT NULL,
+            gender VARCHAR(20) NOT NULL
+        )
+    """)
+    conn.commit()
 
-@app.route('/api/students', methods=['POST'])
-def add_student():
-    data = request.json
-    sql = "INSERT INTO students (name, roll, gender) VALUES (%s, %s, %s)"
-    cursor.execute(sql, (data['name'], data['roll'], data['gender']))
-    db.commit()
-    return jsonify({"message": "Student added"}), 201
-
-@app.route('/api/students', methods=['GET'])
-def get_students():
-    cursor.execute("SELECT name, roll, gender FROM students")
-    results = cursor.fetchall()
-    students = [{"name": row[0], "roll": row[1], "gender": row[2]} for row in results]
-    return jsonify(students)
+@app.route('/api/students', methods=['GET', 'POST'])
+def students():
+    if request.method == 'GET':
+        with get_db() as conn:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT * FROM students")
+            return jsonify(cursor.fetchall())
+    
+    elif request.method == 'POST':
+        data = request.get_json()
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO students (name, roll, gender) VALUES (%s, %s, %s)",
+                (data['name'], data['roll'], data['gender'])
+            )
+            conn.commit()
+            return jsonify({"status": "success"}), 201
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
+    app.run(host='0.0.0.0', port=5000)

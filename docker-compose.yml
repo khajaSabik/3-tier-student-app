@@ -1,55 +1,58 @@
 version: '3.8'
 
-networks:
-  students-app:
-    external: true
-
 services:
   traefik:
     image: traefik:v3.1.5
     container_name: traefik
-    command:
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      - "--entrypoints.web.address=:80"
     ports:
       - "80:80"
-      - "8080:8080"  # Traefik dashboard
+      - "443:443"
+      - "8080:8080"
     volumes:
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./certs:/certs:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - students-app
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.traefik.rule=PathPrefix(`/dashboard`)"
-      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.localhost`)"
       - "traefik.http.routers.traefik.entrypoints=web"
+      - "traefik.http.services.traefik.loadbalancer.server.port=8080"
 
   frontend:
-    build: ./frontend
+    image: nginx:alpine
     container_name: student-frontend
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - students-app
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
-      - "traefik.http.services.frontend.loadbalancer.server.port=80"
-      - "traefik.http.routers.frontend.entrypoints=web"
     depends_on:
       - backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`students.dev.com`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls=true"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
 
   backend:
     build: ./backend
     container_name: student-backend
     networks:
       - students-app
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=mysql://root:rootpass@student-mysql/studentDB
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=PathPrefix(`/api`)"
+      - "traefik.http.routers.backend.rule=Host(`api.students.dev.com`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.backend.entrypoints=websecure"
+      - "traefik.http.routers.backend.tls=true"
       - "traefik.http.services.backend.loadbalancer.server.port=5000"
-      - "traefik.http.routers.backend.entrypoints=web"
-    depends_on:
-      - mysql
 
   mysql:
     image: mysql:8
@@ -62,6 +65,15 @@ services:
       - mysql-data:/var/lib/mysql
     networks:
       - students-app
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+
+networks:
+  students-app:
+    driver: bridge
 
 volumes:
   mysql-data:
